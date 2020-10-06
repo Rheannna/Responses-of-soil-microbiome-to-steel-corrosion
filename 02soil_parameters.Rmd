@@ -26,19 +26,10 @@ library(reshape2)
 
 ```
 
-```{r}
-#一般根据数据是否符合正态分布，选择合适的统计方法：
-#统计方法 	适用情况
-#t.test() 	比较两组(参数)
-#wilcox.test() 	比较两组(非参数)
-#aov()或anova() 	比较多组(参数)
-#kruskal.test() 	比较多组(非参数)
-
-```
 
 ```{r}
 Sys.setenv(R_MAX_NUM_DLLS=999)
-options(stringsAsFactors = F)  #如果自动将字符串转换为因子，太费劲了。。。
+options(stringsAsFactors = F)  #
 load(file ='./input_env_group.Rdata')
 # design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
 # 
@@ -51,18 +42,18 @@ load(file ='./input_env_group.Rdata')
 # 
 # index_new <- subset(index_all, group_Cu2 %in% c("soil1","soil2","Ms2","soil3","Ms3","ps3","p3") )
 # table(index_new[,1])
-# #筛选数据
+# #filter data
 # 
 # data_all <- index_new[,c(2,4,8:15,19:22,25:26)]
 # names(data_all)[1] <- "group"
 # data_all <- data_all[,c(1,3,4,5,6,7,8,10,14,11,12,13,9,15,16,2)]
-# # # #X80Cu 和Q235对比
+# # # #
 # #  data1 <- subset(data_all, group %in% c("Q2352","X80Cu2","Q2353","X80Cu3"))
 # #  data2 <- subset(data_all, group %in% c("Q235s3" , "Q235s2", "X80Cus2", "X80Cus3"))
 # #  data3 <-  subset(data_all, group %in% c("X80Cu1", "Q2351","P1","P","Ps"))
 # # data3$group <- ordered(data3$group, levels = c("X80Cu1","Q2351","P1","P","Ps"))
 # 
-# # # q235s/X80Cus q235/X80Cu对比
+# # # q235s/X80Cus q235/X80Cu
 #  data1 <- subset(data_all, group %in% c("Q2351","Q2352","Q235s2","Q2353","Q235s3"))
 #  data1$group <- ordered(data1$group, levels = c("Q2351","Q2352","Q235s2","Q2353","Q235s3"))
 #  table(data1[,1])
@@ -73,13 +64,13 @@ load(file ='./input_env_group.Rdata')
 #  data3 <- subset(data_all, group %in% c("P1","P","Ps"))
 #  data3$group <- ordered(data3$group, levels = c("P1","P","Ps"))
 # 
-#  #保存数据
+#  #
 #  save(data_all,data1,data2,data3, file = './input_env_group.Rdata') 
  
-#选子集
+#
 data = data2  # 
 
-#改列名
+#
 data <- cbind(row.names(data), data)
 names(data)[1] <- "sample"
 table(data[,"group"])
@@ -88,228 +79,12 @@ data[,"group"] <- as.factor(data[,"group"])
 
 ```
 
-```{r 正态分布和方差齐性}
-
-#统计检验
-library(EasyAovWlxPlot)
-
-#多指标检验正态分布和方差齐性
-normtest <- MuiNorCV(data, num = c(3:17),method_cv = "leveneTest")
-normtest
-
-```
-
-
-```{r 正态检验}
-
-#正态检验：全部组别都需要正态分布，看p值或者后面的标签，是否全部都是正态分布； p2 >=.05:方差齐性
-NorNorCVTest = function(data = data_wt, i= 4,method_cv = "leveneTest"){
-  data_wt = data
-  #构造待分析的子数据框
-  ss <- data_wt[i]
-  colnames(ss) <- c("count")
-  ss$group = data_wt$group
-
-
-  shapiro.test.multi <- function(   #定义函数名
-    data,   #定义函数第一个参数
-    value,  #第2参数
-    group)  #第3参数
-  {       #开始计算
-
-    require(magrittr)   #按需要加载管道函数包
-
-    table(data[,group]) %>%   #提取分组信息，此处即为统计group中值出现的次数，达到了去重的目的
-      data.frame(.) -> a1   #将提取信息从table格式转为数据库data.frame并存为a1，这样才能提取其中一列转为向量
-    a1 = a1 [a1$Freq >0, ]
-    a2 <- as.vector(a1[,1])  #将a1数据的第一列转为向量，这一列即为不重复的分组信息
-
-    data = data.frame(group = data[,group],  #对数据集进行关键变量的提取，提取分组变量为data数据集的group变量
-                      value = data[,value])  #提取计算值为data数据集的value
-
-    test.result <- data.frame(No=0,        #行号
-                              Name=0,      #分组名
-                              W=0,         #W值
-                              p.value=0,   #p值
-                              norm.test=0) #检测结果
-
-    for (i in (1:length(a2))){     #定义for循环计算，从1到a2的长度值这样一个区间，a2的长度即为分组的数量
-      subset(data,                 #指定取数据集    换行写代码使层次更清晰
-             group == a2[i],       #定义去子集的条件，“==”为判断
-             select = value) %>%   #定义需要取集的变量/列，“=”为定义
-        .[,1] %>%                  #  "."定义计算结果放置的位置
-        shapiro.test(.) -> t.r     #进行正态检验分布并存储为t.r
-
-      test.result[i,1] = i              #存储组序号
-      test.result[i,2] = a2[i]          #存储分组名
-      test.result[i,3] = t.r$statistic  #存储W统计量
-      test.result[i,4] = t.r$p.value    #存储计算的p值
-
-      if      #if判断
-      (t.r$p.value > 0.05)           #判断条件
-        test.result[i,5] = "Norm"    #通过判断后的命令
-      else
-        test.result[i,5] = "Other_situation"  #未通过判断执行的命令
-    } #结束循环计算
-
-    test.result[nrow( test.result)+1,1] = "Test Method:"  #给数据框加上检验正态分布方法信息，在最后一行之后加上一行，在第1列放入次数据
-    test.result[nrow( test.result),2] = "Shapiro-Wilk"    #同上行，存在第二列
-
-    test.result  #显示用于存储计算结果的数据框
-  }              #脚本结束
-
-  a = shapiro.test.multi(data_wt[c(2,i)],value = colnames(data_wt[c(2,i)][2]),group = "group")
-  # p2 >=.05:方差齐性
-  if (method_cv == "leveneTest" ) {
-    library("car")
-    xc <- leveneTest(count~group,data=ss)
-    (p2 <- xc[[3]][1])
-
-  }
-
-
-  if (method_cv == "bartlett.test" ) {
-
-    xc <- bartlett.test(count~group,data=ss)
-    (p2 <- xc[[3]])
-    p2 <- round(p2,3)
-
-
-  }
-
-  return(list(a,p2))
-
-  # a$norm.test[-dim(a)[1]] == "Norm"
-
-
-
-}
-## ---------------------第一部分----------------多组数据正态分布和方差齐性分析
-# num = c(4,6)
-# N =4
-MuiNorCV = function(data = data_wt,num = c(4:6),method_cv = "leveneTest"){
-  data_wt = data
-  s1 = rep("A",length(num))
-  s2 = rep("A",length(num))
-  s0 = rep("A",length(num))
-  i = 1
-  for (N in num) {
-
-    resul = NorNorCVTest(data = data_wt, i= N ,method_cv = "leveneTest")
-    a = resul[[1]]
-    b = resul[[2]]
-    name = colnames(data_wt[N])
-    a1 = length(a$p.value[-dim(a)[1]][!a$p.value[-dim(a)[1]] >= 0.05]) == 0
-    b1 = b >=.05
-    s1[i] = a1
-    s2[i] = b1
-    s0[i] = name
-    i = i+1
-  }
-
-  result = cbind(s0,s1,s2)
-  colnames(result) = c("DI","cor","CV")
-  return(result)
-
-}
-
-```
-
-
-```{r 方差分析}
-
-#单个指标方差检验
-result = aovMcomper(data, i = 4, method_Mc = "Turkey")
-result[[2]]
-
-#多个指标
-result = MuiaovMcomper(data = data_wt, num = c(4:6), method_Mc = "Tukey")
-#提取每个指标方差检验多重比较结果
-result
-
-#单个指标非参检验
-res = KwWlx(data = data, i= 4)
-res[[2]]
-
-#多个指标非参检验
-result = MuiKwWlx(data = data_wt,num = c(4:6))
-#提取每个指标非参数检验多重比较结果
-result
-
-
-```
-
-
-```{r 差异分析柱状图}
-
-
-#多组数据差异分析
-result = MuiKwWlx(data = data, num = c(3:20))
-result
-# #结果直接输出到文件夹中
-MuiPlotresultBar(data = data, num = c(3:20),result = result,sig_show ="line")
-
-
-```
-
-
-```{r 多指标差异分析箱线图}
-#不满足正态分布和方差齐的
-data_kw <- data[,c("sample","group","shannon","Amo.N","NOx.N")]
-result = MuiKwWlx(data = data_kw,num = c(3:5))
-result
-# #直接出图到文件夹中
-MuiPlotresultBox(data = data_kw,num = c(3:5),result = result,sig_show ="abc")
-
-
-#满足正态分布和方差齐的
-data_aov <- data[,c("sample","group","Cr","Cu","Fe","Mn","Ni","Mo","Pb","P","pH","TN","TC","Cd")]
-result = MuiaovMcomper(data = data_aov,num = c(3:14),method_Mc = "Tukey")
-result
-# #直接出图到文件夹中
-MuiPlotresultBox(data = data_aov,num = c(3:14),result = result,sig_show ="abc")
-
-```
-
-
-```{r 差异分面箱线图}
-
-# ?FacetMuiPlotresultBox
-#不满足正态分布和方差齐的
-data_kw <- data[,c("sample","group","Pb","Amo.N","NOx.N")]
-result = MuiKwWlx(data = data_kw,num = c(3:5))
-result
-result1 = FacetMuiPlotresultBox(data = data_kw,num = c(3:5),result = result,sig_show ="line",ncol = 2 )
-result1[[1]] + theme_bw()
-
-
-#满足正态分布和方差齐的
-data_aov <- data[,c("sample","group","shannon","Mn","Mo","Cr","Cu","Fe","Ni","P","pH","TN","TC","Cd")]
-result = MuiaovMcomper(data = data_aov,num = c(3:14),method_Mc = "Tukey")
-result
-
-result1 = FacetMuiPlotresultBox(data = data_aov,num = c(3:14),result = result,sig_show ="line",ncol = 2 )
-result1[[1]] + theme_bw()
-
-```
-
-
-```{r 多指标一体化分析}
-# ?MuiStat
+```{r }
 #
-result = MuiStat(data = data1,num = c(3:20),method_cv = "leveneTest",method_Mc = "Tukey",sig_show = "line",ncol =
-4,plot = "box",plottype = "mui")
-result[[1]]
-
-```
-
-
-```{r 以前的统计检验}
-#统计检验
-#soil1<- subset(index_new, group_Cu%in%"soil1") #取子集
+#soil1<- subset(index_new, group_Cu%in%"soil1") #
 
 library(Rmisc)
-#所有环境因子的平均数和方差
+#
 Mn <- summarySE(index_new,na.rm = TRUE, measurevar="Mn", groupvars=c("group_Cu2"))
 Fe <- summarySE(index_new,na.rm = TRUE, measurevar="Fe", groupvars=c("group_Cu2"))
 Cr <- summarySE(index_new,na.rm = TRUE, measurevar="Cr", groupvars=c("group_Cu2"))
@@ -326,7 +101,7 @@ Cu <- summarySE(index_new,na.rm = TRUE, measurevar="Cu", groupvars=c("group_Cu2"
 Mo <- summarySE(index_new,na.rm = TRUE, measurevar="Mo", groupvars=c("group_Cu2"))
 
 
-#所有信息量
+#
 index.m <- index_new[,c(3,16:34,37,38)]
 index.m <- melt(index.m,id.vars = "timegroup")
 ggplot(index.m, aes(as.factor(timegroup),value)) +geom_point() + labs(x="month", y="env") +ggtitle("Soil")
@@ -336,40 +111,40 @@ ggplot(index.m, aes(as.factor(timegroup),value)) +geom_point() + labs(x="month",
 
 ```{r}
 
-#材料比较
+#
 # compaired <- list(c("Q2352","Q235s2"),c("X80Cu2","X80Cus2"),c("Q235s2","X80Cus2"),c("Q2353","Q235s3"),c("X80Cu3","X80Cus3"))
-#Q235比较
+#Q235
 compaired <- list(c("Q2351","Q2352"),c("Q2352","Q235s2"), c("Q2353","Q235s3"),c("Q235s2","Q235s3"),c("Q2351","Q2353"))
 
-#X80Cu比较
+#X80Cu
 compaired <- list(c("X80Cu1","X80Cu2"),c("X80Cu2","X80Cus2"),c("X80Cu3","X80Cus3"),c("X80Cus2","X80Cus3"),c("X80Cu1","X80Cu3"))
 
 
-#高分子
+#
 compaired <- list(c("P1","P"),c("P1","Ps"),c("P","Ps"))
 
-#颜色
+#color
 pal1 = wes_palette("Cavalcanti1",14,type = "continuous" )
 #palette1 = c("#FFA500","#2E8B57","#FF4500","#4682B4","#800080","#708090","#F5F5F5", "#FFA500","#2E8B57","#9ACD32","#808080","#778899","#20B2AA")
 #new color order
 palette1 = c("#4682B4","#FF4500","#FFA500","#73BF00","darkred","#57C3C2","#426600")
-#排序
+#
 library(reshape2)
-#数据备份
+#
 data_bak = data
 
-#宽数据变长数据
+#
 data = data_bak
 data <- melt(data, id = 1:2,variable.name="name")
 
-#按组统计平均数
+#
 c <-  aggregate(value~group + name,data,mean)
 round(c$value, 2)
 
 ```
 
 
-```{r 箱线图}
+```{r boxplot}
 
 Mytheme <- theme_bw()+
   theme(
@@ -387,7 +162,7 @@ Mytheme <- theme_bw()+
       legend.key.size=unit(0.4,'cm'),
       legend.title=element_blank(),
       legend.text = element_text(size = 15,face = "bold"),
-      legend.position = "none"#是否删除图例
+      legend.position = "none"
       )
 ncol = 3
 f <- ggplot(data, aes(x=group, y=value,fill=group))+stat_boxplot(geom='errorbar',linetype=1,width=0.3)+
@@ -399,7 +174,7 @@ b
 
 ```
 
-```{r 线图}
+```{r}
 
 library(dplyr)
 idxw <- index_new$group%in% c("Q235s2","X80Cus2","Q235s3","X80Cus3") 
