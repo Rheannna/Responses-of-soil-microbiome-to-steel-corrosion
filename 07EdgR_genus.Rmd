@@ -10,28 +10,28 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r 数据}
+```{r }
 
-# # #导入分组和otu数据
+# # #
 # # load(file = './input.Rdata')
-# #所有的otu
+# #
 # otu_all <- read.table("../otu_table.txt", header=T, row.names= 1, sep="\t")
-# #门水平表格
+# #
 # phylum <- read.table(file="../otu_table_filter100000_L2_correlation.txt",header=T,row.names=1,sep="\t")
-# #科水平表格
+# #
 # genus <- read.table(file = "../otu_table_filter100000_L5.txt",header=T, row.names=1, sep="\t")
-# #目水平
+# #
 # order <- read.table(file="../otu_table_filter100000_L4_0802.txt",header=T,row.names=1,sep="\t")
-# #属水平
+# #
 # order <- read.table(file="../otu_table_filter100000_L6.txt",header=T,row.names=1,sep="\t")
-# #分组
+# 
 # design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
-# #将相对丰度转换为序列数
-# or <- match(colnames(otu_all), colnames(order)) #对齐列
+# #
+# or <- match(colnames(otu_all), colnames(order)) 
 # order <- order[,or]
-# sum <- as.list(colSums(otu_all))  #矩阵应该和列表相乘除
-# order_count <- order*sum #各个属的count
-# sub_design = design[rownames(design) %in% colnames(order_count) ,] #对齐环境因子
+# sum <- as.list(colSums(otu_all))  
+# order_count <- order*sum 
+# sub_design = design[rownames(design) %in% colnames(order_count) ,] 
 # order_count = order_count[, rownames(sub_design)]
 # idx <- design$group_Cu2%in% c("soil1","soil2","Ms2","soil3","Ms3","ps3","p3")
 # design_subset <- design[idx, ]
@@ -58,10 +58,10 @@ load(file = "../design_subset.Rdata")
 # create DGE list
 group <- subset(design_subset, Description %in% c("X80Cu2","X80Cus2"))
 idx <- design_subset$Description %in% c("X80Cu2","X80Cus2")
-data <- otu_table_subset[ ,idx]  #用属的信息计算
+data <- otu_table_subset[ ,idx]  
 data <- data[rowSums(data)>0,]
 
-###制作LEFse所需文件
+###
 # otu_X80Cus2_LEFse <- cbind(group[,c("Description","group_Cu2")], t(data)[match(row.names(group),colnames(data)), ])
 # otu_X80Cus2_LEFse <- t(otu_X80Cus2_LEFse )
 # # write.table(file="./otu_X80Cus2_LEFse.txt",otu_X80Cus2_LEFse, sep = "\t" )
@@ -77,29 +77,29 @@ groups<- factor(groups)
 
 d = DGEList(counts=data, group=groups)
 
-##标准化
+##
 d = calcNormFactors(d)
 logcpm <- cpm(d, prior.count=2, log=TRUE)
 
-# 生成实验设计矩阵
+# 
 design.mat<-model.matrix(~0 + d$samples$group)
 colnames(design.mat)=levels(groups)
 d2 = estimateGLMCommonDisp(d, design.mat)
 d2=estimateGLMTrendedDisp(d2, design.mat)
 d2 = estimateGLMTagwiseDisp(d2, design.mat)
-#构建一个基因表达值的广义线性模型，这里是OTU的丰度模型。
+#
 d2<-na.omit(d2)
 fit = glmQLFit(d2, design.mat)
 qlf <- glmQLFTest(fit,coef=2)
 topTags(qlf)
 
-# 设置比较组
-# 组间似然比检验比较,统计Fold change, Pvalue
+# 
+# Fold change, Pvalue
 #-------------------------------------------------------
 lrt <- glmLRT(fit,contrast=c(-1,1))
-# FDR检验，控制假阳性率小于5%
+# FDR
 de_lrt <- decideTestsDGE(lrt, adjust.method="fdr", p.value=0.05)
-# 导出计算结果
+# 
 x=lrt$table
 x$sig=de_lrt
 a <- as.data.frame(x$sig)
@@ -134,8 +134,8 @@ save(X80Cus2_enriched, X80Cus2_depleted, Q235s2_enriched, Q235s2_depleted, Q235s
 ```
 
 
-```{r 哑铃图}
-#哑铃图
+```{r }
+#
 rm(list=ls())
 load(file = "../design_subset.Rdata")
 load(file = "./different_otu.Rdata")
@@ -149,7 +149,7 @@ load(file = "./different_otu.Rdata")
 
 data <- Q235s3_enriched
 
-#转为相对丰度
+#
 otu_all <- read.table("../otu_table.txt", header=T, row.names= 1, sep="\t")
 inx <- colnames(data)
 dat <- otu_all[,inx]
@@ -167,13 +167,13 @@ data.m <- melt(mat ,id="group")
 data.m$group <- factor(data.m$group)
 c <-  aggregate(value~group + variable,data.m,mean)
 
-#截短行名
+#
 library(stringr)
-name=str_split(c$variable,';',simplify = T)[,c(3,4,5,6)] #取行名，以';'号分割，提取。
+name=str_split(c$variable,';',simplify = T)[,c(3,4,5,6)] 
 name <- as.data.frame(name)
 name$names <- str_c(name[,2], name[,4],sep = ";")
 c$genus <- name$names
-c1 <-  aggregate(value~group + genus,c,mean)  #合并重复的，在提取目和属名后
+c1 <-  aggregate(value~group + genus,c,mean)  
 
 Mytheme <- theme_bw()+
   theme(
@@ -189,7 +189,7 @@ Mytheme <- theme_bw()+
       axis.line.y=element_line(size=0.5),
       legend.key.size=unit(0.4,'cm'),
       legend.title=element_text(size=12,face="bold",),
-      legend.text = element_text(size = 10,face = "bold") #,legend.position = "none"#是否删除图例
+      legend.text = element_text(size = 10,face = "bold") 
       )
 
 p <- ggplot(c1, aes(value, genus, fill= group)) + geom_line(aes(group=genus)) + geom_point(shape=21,size=3,colour="black") + scale_fill_manual(values=c("#00AFBB","#FC4E07","#36BED9")) + theme(legend.position= c(0.75,0.1))+
@@ -202,8 +202,8 @@ p
 ```
 
 
-```{r 韦恩图}
-#韦恩图
+```{r }
+#
 library(VennDiagram)
 Q235s2 <- row.names(Q235s2_enriched)
 Q235s3 <- row.names(Q235s3_enriched)
