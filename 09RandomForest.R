@@ -7,7 +7,7 @@ library(randomForest)
 load(file = "./different_otu.Rdata")
 load(file = "../design_subset.Rdata")
 
-#腐蚀数据
+#
 if(F) {
   se <-read.table("../Fasting_map_all_beta_0223.txt",sep="\t",header=T,row.names=1)
   
@@ -23,14 +23,13 @@ if(F) {
   data <- data_all[idx1,]
   data <- as.data.frame(t(data[,-c(1,2)]))
   
-  #菌群数据design_subset.Rdata 和 different_otu.Rdata
-  #求多个向量交集
+  #
   list = Reduce(intersect,  list(v1 = row.names(X80Cus3_enriched),
                                  v2 = row.names(X80Cus2_enriched),
                                  v3 = row.names(Q235s2_enriched),
                                  v4 = row.names(Q235s3_enriched),
                                  v5 = row.names(Ps_enriched)) )
-  #求多个向量并集
+  #
   union = Reduce(union,  list(v1 = row.names(X80Cus3_enriched),
                               v2 = row.names(X80Cus2_enriched),
                               v3 = row.names(Q235s2_enriched),
@@ -41,30 +40,23 @@ if(F) {
   dat <- dat[-23, ]
  # dat <- log2(dat+1)
 }
-#合并腐蚀和富集菌数据
+#
 Dat.fill <- cbind(env1,t(dat)[match(row.names(env1),row.names(t(dat))), ])
 ####random forest for relation bwteen OTU and weight_loss
 
-# #填补缺省值，按照中位数或众数
+# #
 # Dat.fill<-na.roughfix(index_abd_enrich)
 
 ##################RandomForest#####################
 #rf1$importance
 #rf1$predicted
-#Mean Decrease Accuracy衡量把一个变量的取值变为随机数, 随机森林预测准确性的降低程度。该值越大表示该变量的重要性越大 (Liaw, 2012)。
-#特征重要性评价标准
+#Mean Decrease Accuracy
 
-# #%IncMSE 是 increase in MSE。
-# 就是对每一个变量 比如 X1 随机赋值, 如果 X1重要的话, 预测的误差会增大,
-# 所以 误差的增加就等同于准确性的减少,所以MeanDecreaseAccuracy 是一个概念的.
-# #IncNodePurity 也是一样, 如果是回归的话, 
-# node purity 其实就是 RSS（残差平方和residual sum of squares） 的减少, 
-# node purity 增加就等同于 Gini 指数的减少,也就是节点里的数据或 class 都一样,
-# 也就是 Mean Decrease Gini.
+# 
 
-# 0229 loss_ratio
+# loss_ratio
 if(F){
-  #筛选mtry
+  
   n <- length(names(Dat.fill[,c(5:ncol(Dat.fill))]))
   
   v <- c(0)
@@ -83,7 +75,7 @@ if(F){
   rf1 = randomForest(Dat.fill[,c(5:ncol(Dat.fill))],Dat.fill$loss_ratio,importance=TRUE, nodesize=5,proximity= TRUE,ntree=299, mtry= 29)
   plot(rf1) #ntree
   print(rf1)
-  #查看重要性程度
+  #
   round(importance(rf1), 2)
   
   varImpPlot(rf1,main = "Feature importance measured by Random Forest",n.var = 14, bg = par("bg"),
@@ -102,36 +94,36 @@ if(F){
   rp.importance(rf_CRs, scale = TRUE)
   plot(rp.importance(rf_CRs, scale = TRUE))
   
-  #提取预测结果
+  #
   rf_otu <- as.data.frame(rp.importance(rf_CRs,scale = TRUE))
   
   names(rf_otu)
   
   #write.table(file="randomforest_loss_ratio_enrich_otu_in_Ms.txt", rf_otu,sep="\t")
   
-  #分开显著性和不显著性
+  #
   rf_otu$pval1 <- ifelse(rf_otu$`%IncMSE.pval`<0.05, "A", "B")
   rf_otu$pval2 <- ifelse(rf_otu$`IncNodePurity.pval`<0.05, "A", "B")
   
-  #去除负的
+  #
   rf_otu <- subset(rf_otu,rf_otu$`%IncMSE`>0 & rf_otu$`IncNodePurity`>0 )
   
   
   
   rf_otu$name <- row.names(rf_otu)
-  #截短行名
+  #
   library(stringr)
-  name=str_split(rf_otu$name,';',simplify = T)[,c(3,4,5,6)] #取行名，以';'号分割，提取。
+  name=str_split(rf_otu$name,';',simplify = T)[,c(3,4,5,6)] 
   name <- as.data.frame(name)
   name$names <- str_c(name[,1], name[,4],seq(1:nrow(rf_otu)),sep = ";")
   rf_otu$name <- name$names
-  #排序
+  #
   rf_otu <- rf_otu[order(rf_otu$`%IncMSE`,rf_otu$IncNodePurity,decreasing = TRUE),]
   names(rf_otu)[1] <- "IncMSE" 
   
   # importance1 <- subset(rf_otu, rf_otu$`%IncMSE.pval`<0.05)
   # importance2 <- subset(rf_otu, rf_otu$`IncNodePurity.pval`<0.05)
-  #IncMSE柱形图1
+  #IncMSE
   p1 <- ggplot(rf_otu, aes(x=reorder(name,IncMSE), y= IncMSE,fill = pval1)) + 
     geom_bar(stat = 'identity',color= "black") + 
     coord_flip() + labs(x="genus", y="IncMSE") + 
@@ -153,7 +145,7 @@ if(F){
   ggsave(filename = "randomForest_loss_ratio_IncNodePurity.pdf",p1,  width = 6, height = 5)
   
   
-  #IncMSE柱形图2
+  #IncMSE
   p2 <- ggplot(data=rf_otu, aes(x=reorder(name,IncMSE), y=IncMSE, fill=pval1))+
     geom_bar(stat = "identity",position = "identity",width=0.9)+
     coord_flip()+
@@ -169,7 +161,7 @@ if(F){
 
 #0229 redox
 if(F){
-  #筛选mtry
+  #
   n <- length(names(Dat.fill[,c(5:ncol(Dat.fill))]))
   
   v <- c(0)
@@ -188,7 +180,7 @@ if(F){
   rf1 = randomForest(Dat.fill[,c(5:ncol(Dat.fill))],Dat.fill$redox,importance=TRUE, nodesize=5,proximity= TRUE,ntree=299, mtry= 29)
   plot(rf1) #ntree
   print(rf1)
-  #查看重要性程度
+  #
   round(importance(rf1), 2)
   
   varImpPlot(rf1,main = "Feature importance measured by Random Forest",n.var = 14, bg = par("bg"),
@@ -207,35 +199,35 @@ if(F){
   rp.importance(rf_CRs, scale = TRUE)
   plot(rp.importance(rf_CRs, scale = TRUE))
   
-  #提取预测结果
+  #
   rf_otu <- as.data.frame(rp.importance(rf_CRs,scale = TRUE))
   
   names(rf_otu)
   
   #write.table(file="randomForest_redox_enrich_otu_in_Ms.txt", rf_otu, sep="\t")
-  #分开显著性和不显著性
+  #
   rf_otu$pval1 <- ifelse(rf_otu$`%IncMSE.pval`<0.05, "A", "B")
   rf_otu$pval2 <- ifelse(rf_otu$`IncNodePurity.pval`<0.05, "A", "B")
   
-  #去除负的
+  #
   rf_otu <- subset(rf_otu,rf_otu$`%IncMSE`>0 & rf_otu$`IncNodePurity`>0 )
   
   
   
   rf_otu$name <- row.names(rf_otu)
-  #截短行名
+  #
   library(stringr)
   name=str_split(rf_otu$name,';',simplify = T)[,c(3,4,5,6)] #取行名，以';'号分割，提取。
   name <- as.data.frame(name)
   name$names <- str_c(name[,1], name[,4],seq(1:nrow(rf_otu)),sep = ";")
   rf_otu$name <- name$names
-  #排序
+  #
   rf_otu <- rf_otu[order(rf_otu$`%IncMSE`,rf_otu$IncNodePurity,decreasing = TRUE),]
   names(rf_otu)[1] <- "IncMSE" 
   
   # importance1 <- subset(rf_otu, rf_otu$`%IncMSE.pval`<0.05)
   # importance2 <- subset(rf_otu, rf_otu$`IncNodePurity.pval`<0.05)
-  #IncMSE柱形图1
+  #
   p1 <- ggplot(rf_otu, aes(x=reorder(name,IncMSE), y= IncMSE,fill = pval1)) + 
     geom_bar(stat = 'identity',color= "black") + 
     coord_flip() + labs(x="genus", y="IncMSE") + 
@@ -254,7 +246,7 @@ if(F){
   p1
   ggsave(filename = "randomForest_redox_IncNodePurity.pdf",p1,  width = 6, height = 5)
   
-  #IncMSE柱形图2
+  #
   p2 <- ggplot(data=rf_otu, aes(x=name, y=IncMSE, fill=pval1))+
     geom_bar(stat = "identity",position = "identity",width=0.9)+
     coord_flip()+
@@ -268,11 +260,11 @@ if(F){
   
 }
 
-#差异显著性
+#
 obs <- aov(value ~ bgroup_soil, data = predicted2.melt)
-# 使用TukeyHSD对组间进行检验，效正pvalue
+#
 Tukey_HSD_obs <- TukeyHSD(obs, ordered = FALSE, conf.level = 0.95)
-# 结果中提取需要的结果
+# 
 obs_table <- as.data.frame(Tukey_HSD_obs$bgroup_soil)
-# 预览结果
+# 
 obs_table #
