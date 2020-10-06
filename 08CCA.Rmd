@@ -1,0 +1,412 @@
+---
+title: "CCA"
+author: "Rheanna"
+date: "2019年11月6日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(vegan)
+library(ggplot2)
+#library(devtools)
+#devtools::install_github("gavinsimpson/ggvegan",build_vignettes = FALSE)
+#library(ggvegan)
+library(permute)
+library(ggrepel)
+library(ggthemes)
+library(dplyr)
+```
+
+```{r}
+#读取数据
+ #所有的otu
+# otu_all <- read.table("../otu_table.txt", header=T, row.names= 1, sep="\t")
+#otu_al20 = read.table("../otu_table_filter_al20.txt", header=T, row.names= 1, sep="\t")
+#otu_norm <- read.table(file="./otu_table_freqs.txt",header=T,row.names=1,sep="\t")
+# otu_al20 = read.table("../otu_table_filter_al20.txt", header=T, row.names= 1, sep="\t")
+# otu_norm <- read.table(file="./otu_table_freqs.txt",header=T,row.names=1,sep="\t")
+# otu_al20 <- otu_norm[row.names(otu_al20),]
+# otu_al20 <- otu_al20 *10000
+# #门水平表格
+# phylum <- read.table(file="../otu_table_filter100000_L2_correlation.txt",header=T,row.names=1,sep="\t")
+# #科水平表格
+# genus <- read.table(file = "../otu_table_filter100000_L5.txt",header=T, row.names=1, sep="\t")
+# #目水平
+# order <- read.table(file="../otu_table_filter100000_L4_0802.txt",header=T,row.names=1,sep="\t")
+# #属水平
+# order <- read.table(file="../otu_table_filter100000_L6.txt",header=T,row.names=1,sep="\t")
+
+design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+
+```
+
+```{r}
+#环境因子
+alpha = read.table("../alpha_al20.txt", header=T, row.names= 1, sep="\t")
+se <-read.table("../Fasting_map_all_beta_0223.txt",sep="\t",header=T,row.names=1)
+env.data.log <- log1p(abs(se))
+env <- na.omit(env.data.log)
+index = cbind(alpha, env.data.log[match(rownames(alpha), rownames(env.data.log)), ])
+index1 = index[,c(5:23)]
+
+index_all = cbind(design[,c(3,5)], index1[match(rownames(design), rownames(index1)), ])
+
+idx1 <- design$group_Cu2%in% c("soil2","soil3","Ms2","Ms3","ps3","p3") 
+# 
+env1 <- index_all[idx1, ]
+
+#筛选后的sub环境因子
+env_all <- env1[,c(1:10,14:17,20:21)]
+
+#菌群数据
+# data <- otu_al20
+# otu_al20_log <- log2(data+1)
+otu_al20_t <- t(data)
+index_otu = cbind(design[,c(3,5)],otu_al20_t[match(rownames(design), rownames(otu_al20_t)), ])
+index_otu1 <-index_otu[idx1,]
+
+```
+
+```{r}
+#查看分布
+colramp = colorRampPalette(c(3,"white",2))(50)
+   plot(density(index_soil[,4]),col=colramp[1],lwd=3,ylim=c(0,100))
+   for(i in 5:50){lines(density(index_soil[,i]),lwd=3,col=colramp[i])}
+```
+
+
+
+```{r}
+#mantel test 
+veg.dist <- vegdist(index_otu1[,(3:ncol(index_otu1))]) # Bray-Curtis
+env.dist <- vegdist(env_all[,3:16], "euclid")
+m <- mantel(veg.dist, env.dist,method="spearman")
+m
+```
+
+```{r}
+##土壤all
+data2 <- index_otu1[,(3:ncol(index_otu1))]
+soil2 <- env_all[,3:16]
+
+
+otu.tab.0 <- cca(data2 ~ 1, soil2) 
+otu.tab.0 
+otu.tab.1<- cca(data2 ~ ., soil2)
+otu.tab.1
+```
+
+```{r}
+#我们在筛选完RDA和CCA分析后，我们需要对所有环境因子进行共线性分析，利用方差膨胀因子分析
+vif.cca(otu.tab.1)
+
+```
+
+```{r}
+#删除掉共线性的环境因子，删掉最大的变量，直到所有的变量都小于10
+otu.tab.1<- cca(data2 ~ ., soil2)
+otu.tab.1
+vif.cca(otu.tab.1)
+```
+
+```{r}
+##用step模型检测最低AIC值
+mod.u <- step(otu.tab.0, scope = formula(otu.tab.1), test = "perm")# "perm"增加P值等参数
+
+```
+```{r}
+#从下往上
+mod.d <- step(otu.tab.0, scope = (list(lower = formula(otu.tab.0), upper = formula(otu.tab.1))))
+mod.d
+```
+
+```{r}
+otu.cca.f<- cca(data2 ~ Mn+ NOx.N + TN+ pH+Amo.N ,soil2)
+```
+
+```{r}
+b <- anova(otu.cca.f, by = "term")
+b
+
+p.adjust(b$`Pr(>F)`,method="fdr",length(b$`Pr(>F)`))  
+```
+
+
+```{r}
+   str(b)
+    x.p = b$Pr[1] ;x.p
+   x.F = b$F[1]  ;x.F
+   output1 = summary(otu.cca.f)
+   output1
+   str(output1)
+   d=output1$sites;  ##样本坐标
+   d <- as.data.frame(d)
+   e=output1$cont$importance; ##特征值，解释度 #eigenvals(C.whole)
+    e <- as.data.frame(e)
+   f=output1$biplot;  ##环境因子坐标
+   f <- as.data.frame(f)
+```
+
+
+```{r}
+permutest(otu.cca.f,permu=999)
+```
+
+
+```{r}
+envv<- c("NOx.N","TN","Mn","pH","Amo.N")
+
+env22 <- select(soil2,envv)
+ef=envfit(otu.cca.f,env22,permu=999)
+ef
+```
+
+```{r}
+####计算每个环境因子的解释率
+library(hier.part)
+library(rdaenvpart)
+#pieplot="tv"表明占能被解释的比例,tev表示占总解释的比例
+r <- rdaenvpart(index_otu1[,(3:ncol(index_otu1))],env22,pieplot = "tv",type="CCA")
+```
+
+```{r}
+library(rdacca.hp)
+rdacca.hp(index_otu1[,(3:ncol(index_otu1))],env22,pieplot = "tv",type="CCA")
+```
+
+
+```{r}
+#画图1
+#install.packages("devtools")
+#devtools::install_github("gavinsimpson/ggvegan")
+    library(vegan)
+    library(ggvegan)
+    autoplot(otu.cca.f,geom="text")+theme_bw()
+
+```
+
+
+```{r}
+#画图2
+   output1 = summary(otu.cca.f)
+   output1
+   str(output1)
+   d=output1$sites;  ##样本坐标
+   d <- as.data.frame(d)
+   e=output1$cont$importance; ##特征值，解释度 #eigenvals(C.whole)
+    e <- as.data.frame(e)
+   f=output1$biplot;  ##环境因子坐标
+   f <- as.data.frame(f)
+   
+   
+ obj <- broom(otu.cca.f)#obj <- fortify(as.data.frame(otu.cca.f))
+axes <- attr(obj, "dimlabels")
+###otu定位
+layers = c("species")
+objsp <- obj[obj$Score %in% layers, ,drop = FALSE]
+obs <- objsp [,1:4]
+#obs$Genus <- otu$G
+
+#环境因子
+layers=c("biplot")
+aro<- obj[obj$Score %in% layers, ,drop =FALSE]
+aro<-aro[,1:4]
+layers1 = c("Mn","TN","NOx.N","Fe")
+aro1 <- obj[obj$Label %in% layers1, ,drop = FALSE] 
+
+#样本点
+layers2 =c("sites")
+sites <- obj[obj$Score%in% layers2, ,drop = FALSE]
+sites <- sites [,1:4]
+rownames(sites)<-sites$Label
+
+####加分组信息
+sample1<-index_otu1[,1:4]
+samplenew=data.frame(cbind(sites,sample1[match(rownames(sites),rownames(sample1)),]))   
+samplenew$group_Cu2 <- factor(samplenew$group_Cu2,levels=c("soil2","Ms2","soil3","Ms3","p3","ps3"))
+samplenew$group_soil <- factor(samplenew$group_soil,levels=c("Ms","soil"))
+###颜色
+colorwsj<-c("#FF4500","#FFA500","#73BF00","darkred","#57C3C2","#426600")
+```
+
+
+```{r}
+#加标签 + geom_text_repel(data = samplenew, aes(CCA1, CCA2, label=group_Cu2), size=1.5, box.padding=unit(0.2, "lines"), point.padding=unit(0.2, "lines"), segment.color = "grey50", segment.size = 0.2, arrow = arrow(length=unit(0.01, "npc")),force = 1, max.iter = 3e3)
+
+##1118
+a <- ggplot(data=obs, aes_string(x = 'CCA1', y ='CCA2')) +  
+  geom_point(size = 1,alpha=0.6,color="lightgray",show.legend = FALSE) +geom_point(data=samplenew, aes(color=group_soil ),size=3,alpha=0.8)+
+  geom_hline(yintercept=0,linetype=3) + 
+  geom_vline(xintercept=0,linetype=3) + 
+  labs(x="CCA 1",  y="CCA 2 ")+ 
+  scale_x_continuous(name = axes[1], limits = NULL) + 
+  scale_y_continuous(name = axes[2], limits = NULL)+scale_color_calc()+ 
+  coord_fixed() +
+  theme_bw()+theme(legend.title=element_blank())+
+  theme(panel.grid=element_blank())
+a
+
+
+b<- a +geom_segment(data = aro1, aes (x = 0, y = 0, xend = 2.5*CCA1,yend =2.5*CCA2), arrow = arrow(length = unit(0.2, "cm")), alpha=0.6,size=0.6,color ="gray50", show.legend= FALSE) + geom_text(data = aro1, aes (x = 2.6*CCA1,y = 2.6*CCA2, label = Label,  hjust=0.1, vjust=-0.3, show.legend= FALSE), size=3,colour = "black", parse = TRUE)
+b
+#ggsave("./2019113/CCAplot_1120.pdf",b,width=8,height=6)
+###
+
+```
+
+##soil3
+```{r}
+##
+data3 <- index_soil3[,(4:3798)]
+soil3 <- env3[,4:22]
+otu.tab.0 <- cca(data3 ~ 1, soil3) 
+otu.tab.0 
+otu.tab.1<- cca(data3 ~ ., soil3)
+otu.tab.1
+```
+
+```{r}
+#我们在筛选完RDA和CCA分析后，我们需要对所有环境因子进行共线性分析，利用方差膨胀因子分析
+vif.cca(otu.tab.1)
+
+```
+
+```{r}
+#删除掉共线性的环境因子，删掉最大的变量，直到所有的变量都小于10
+otu.tab.1<- cca(data3 ~  weight_loss+ Mn+Amo+TN+TC, soil3)
+otu.tab.1
+vif.cca(otu.tab.1)
+```
+
+```{r}
+##用step模型检测最低AIC值
+mod.u <- step(otu.tab.0, scope = formula(otu.tab.1), test = "perm")# "perm"增加P值等参数
+
+```
+
+```{r}
+#从下往上
+mod.d <- step(otu.tab.0, scope = (list(lower = formula(otu.tab.0), upper = formula(otu.tab.1))))
+mod.d
+```
+
+```{r}
+otu.cca.f<- cca(data3 ~weight_loss + Mn + Amo + TN + TC,soil3)
+```
+
+```{r}
+b <- anova(otu.cca.f, by = "term")
+b
+c <- anova(otu.cca.f, by = "axis")
+c
+p.adjust(b$`Pr(>F)`,method="fdr",length(b$`Pr(>F)`))  
+```
+
+
+```{r}
+   str(b)
+    x.p = b$Pr[1] ;x.p
+   x.F = b$F[1]  ;x.F
+   output1 = summary(otu.cca.f)
+   output1
+   str(output1)
+   d=output1$sites ##样本坐标
+   d <- as.data.frame(d)
+   e=output1$cont$importance##特征值，解释度 #eigenvals(C.whole)
+    e <- as.data.frame(e)
+   f=output1$biplot ##环境因子坐标
+   f <- as.data.frame(f)
+```
+
+
+```{r}
+permutest(otu.cca.f,permu=999)
+```
+
+
+```{r}
+envv<- c("weight_loss","Mn","Amo","TN","TC")
+env33 <- select(soil3,envv)
+ef=envfit(otu.cca.f,env33,permu=999)
+ef
+```
+
+
+```{r}
+#画图1
+#install.packages("devtools")
+#devtools::install_github("gavinsimpson/ggvegan")
+    library(vegan)
+    library(ggvegan)
+    autoplot(otu.cca.f,geom="text")+theme_bw()
+
+```
+
+```{r}
+####计算每个环境因子的解释率
+library(hier.part)
+library(rdaenvpart)
+rdaenvpart(data3,env33,pieplot = "tv",type="CCA")
+```
+
+
+
+```{r}
+#画图2
+
+obj <- fortify(otu.cca.f)
+axes <- attr(obj, "dimlabels")
+###otu定位
+layers = c("species")
+objsp <- obj[obj$Score %in% layers, ,drop = FALSE]
+obs <- objsp [,1:4]
+#obs$Genus <- otu$G
+
+#环境因子
+layers=c("biplot")
+aro<- obj[obj$Score %in% layers, ,drop =FALSE]
+aro<-aro[,1:4]
+layers1 = c("weight_loss","Mn","Amo","TN","TC")
+aro1 <- obj[obj$Label %in% layers1, ,drop = FALSE] 
+
+#样本点
+layers2 =c("sites")
+sites <- obj[obj$Score%in% layers2, ,drop = FALSE]
+sites <- sites [,1:4]
+rownames(sites)<-sites$Label
+
+####加分组信息
+sample1<-index_soil3[,1:3]
+samplenew=data.frame(cbind(sites,sample1[match(rownames(sites),rownames(sample1)),]))   
+
+```
+
+
+```{r}
+
+##1010
+a <- ggplot(data=obs, aes_string(x = 'CCA1', y ='CCA2')) +  
+  geom_point(size = 1,alpha=0.6,color="lightgray",show.legend = FALSE) +geom_point(data=samplenew, aes(color=materialgroup ),size=3,alpha=0.8)+ 
+  geom_text_repel(data = samplenew, aes(CCA1, CCA2, label=materialgroup), size=1.5, box.padding=unit(0.2, "lines"), point.padding=unit(0.2, "lines"), segment.color = "grey50", segment.size = 0.2, arrow = arrow(length=unit(0.01, "npc")),force = 1, max.iter = 3e3)+
+  geom_hline(yintercept=0,linetype=3) + 
+  geom_vline(xintercept=0,linetype=3) + 
+  labs(x=paste("CCA 1"),  y=paste("CCA 2 "))+ 
+  scale_x_continuous(name = axes[1], limits = NULL) + 
+  scale_y_continuous(name = axes[2], limits = NULL) + 
+  scale_color_calc()+ 
+  coord_fixed() +
+  theme_bw()+theme(legend.title=element_blank())+
+  theme(panel.grid=element_blank())
+a
+
+
+b<- a +geom_segment(data = aro1, aes (x = 0, y = 0, xend = 2.5*CCA1,yend =2.5*CCA2), arrow = arrow(length = unit(0.2, "cm")), alpha=0.6,size=0.6,color ="gray50", show.legend= FALSE) + geom_text(data = aro1, aes (x = 2.6*CCA1,y = 2.6*CCA2, label = Label,  hjust=0.1, vjust=-0.3, show.legend= FALSE), size=3,colour = "black", parse = TRUE, show.legend = FALSE)  
+b
+#ggsave("./201910/CCAplot_soil3_1106.pdf",b,width=8,height=6)
+###保存为CCAfinal2.pdf
+
+```

@@ -1,0 +1,221 @@
+---
+title: "Vegan"
+author: "HY"
+date: "2019年11月13日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r 数据}
+
+# # #导入分组和otu数据
+# # load(file = './input.Rdata')
+# #所有的otu
+# otu_all <- read.table("../otu_table.txt", header=T, row.names= 1, sep="\t")
+# #门水平表格
+# phylum <- read.table(file="../otu_table_filter100000_L2_correlation.txt",header=T,row.names=1,sep="\t")
+# #科水平表格
+# genus <- read.table(file = "../otu_table_filter100000_L5.txt",header=T, row.names=1, sep="\t")
+# #目水平
+# order <- read.table(file="../otu_table_filter100000_L4_0802.txt",header=T,row.names=1,sep="\t")
+# #属水平
+# order <- read.table(file="../otu_table_filter100000_L6.txt",header=T,row.names=1,sep="\t")
+# #分组
+# design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+# #将相对丰度转换为序列数
+# or <- match(colnames(otu_all), colnames(order)) #对齐列
+# order <- order[,or]
+# sum <- as.list(colSums(otu_all))  #矩阵应该和列表相乘除
+# order_count <- order*sum #各个属的count
+# sub_design = design[rownames(design) %in% colnames(order_count) ,] #对齐环境因子
+# order_count = order_count[, rownames(sub_design)]
+# idx <- design$group_Cu2%in% c("soil1","soil2","Ms2","soil3","Ms3","ps3","p3")
+# design_subset <- design[idx, ]
+# otu_table_subset <- order_count[ ,idx]
+# save(design_subset,otu_table_subset,file = "../design_subset.Rdata" )
+
+```
+
+####index
+
+```{r echo=TRUE, warning=TRUE}
+
+rm(list=ls())
+Sys.setenv(R_MAX_NUM_DLLS=999)
+#options(stringsAsFactors = F)  
+
+library(vegan)
+library(edgeR)
+
+load(file = "../design_subset.Rdata")
+
+
+
+# create DGE list
+group <- subset(design_subset, Description %in% c("X80Cu2","X80Cus2"))
+idx <- design_subset$Description %in% c("X80Cu2","X80Cus2")
+data <- otu_table_subset[ ,idx]  #用属的信息计算
+data <- data[rowSums(data)>0,]
+
+###制作LEFse所需文件
+# otu_X80Cus2_LEFse <- cbind(group[,c("Description","group_Cu2")], t(data)[match(row.names(group),colnames(data)), ])
+# otu_X80Cus2_LEFse <- t(otu_X80Cus2_LEFse )
+# # write.table(file="./otu_X80Cus2_LEFse.txt",otu_X80Cus2_LEFse, sep = "\t" )
+
+
+
+
+
+### Generalized Linear Model (GLM)
+# create DGE list
+groups <- group$ Description
+groups<- factor(groups)
+
+d = DGEList(counts=data, group=groups)
+
+##标准化
+d = calcNormFactors(d)
+logcpm <- cpm(d, prior.count=2, log=TRUE)
+
+# 生成实验设计矩阵
+design.mat<-model.matrix(~0 + d$samples$group)
+colnames(design.mat)=levels(groups)
+d2 = estimateGLMCommonDisp(d, design.mat)
+d2=estimateGLMTrendedDisp(d2, design.mat)
+d2 = estimateGLMTagwiseDisp(d2, design.mat)
+#构建一个基因表达值的广义线性模型，这里是OTU的丰度模型。
+d2<-na.omit(d2)
+fit = glmQLFit(d2, design.mat)
+qlf <- glmQLFTest(fit,coef=2)
+topTags(qlf)
+
+# 设置比较组
+# 组间似然比检验比较,统计Fold change, Pvalue
+#-------------------------------------------------------
+lrt <- glmLRT(fit,contrast=c(-1,1))
+# FDR检验，控制假阳性率小于5%
+de_lrt <- decideTestsDGE(lrt, adjust.method="fdr", p.value=0.05)
+# 导出计算结果
+x=lrt$table
+x$sig=de_lrt
+a <- as.data.frame(x$sig)
+names(a)[1] <- "sig"
+enriched = row.names(subset(a,sig==1))
+depleted = row.names(subset(a,sig==-1))
+
+enriched
+
+enriched_otu <- data[enriched, ]
+
+depleted
+depleted_otu <- data[depleted, ]
+
+
+# X80Cus2_enriched <- enriched_otu
+# X80Cus2_depleted <- depleted_otu
+# Q235s2_enriched <- enriched_otu
+# Q235s2_depleted <- depleted_otu
+# Q235s3_enriched <- enriched_otu
+# X80Cus3_enriched <- enriched_otu
+# X80Cus3_depleted <- depleted_otu
+# Ps_enriched <- enriched_otu
+# Ps_depleted <- depleted_otu
+
+
+save(X80Cus2_enriched, X80Cus2_depleted, Q235s2_enriched, Q235s2_depleted, Q235s3_enriched, X80Cus3_enriched,  X80Cus3_depleted,Ps_enriched, Ps_depleted, file = "./different_otu.Rdata")
+
+
+#write.table(depleted_otu,file="./soil2_Ms2_depleted.txt",sep="\t",col.names = NA)
+
+```
+
+
+```{r 哑铃图}
+#哑铃图
+rm(list=ls())
+load(file = "../design_subset.Rdata")
+load(file = "./different_otu.Rdata")
+
+# 
+# X80Cus3 <- rbind(X80Cus3_enriched,X80Cus3_depleted)
+# X80Cus2 <- rbind(X80Cus2_enriched,X80Cus2_depleted)
+# Q235s2 <-  rbind(Q235s2_enriched,Q235s2_depleted)
+# Q235s3 <- Q235s3_enriched
+# Ps <- rbind(Ps_enriched,Ps_depleted)
+
+data <- Q235s3_enriched
+
+#转为相对丰度
+otu_all <- read.table("../otu_table.txt", header=T, row.names= 1, sep="\t")
+inx <- colnames(data)
+dat <- otu_all[,inx]
+sum <- as.list(colSums(dat)) 
+
+data <- data/sum
+
+mat <- cbind(t(data), design_subset[,c(3,5)][match(colnames(data),row.names(design_subset)), ])
+mat <- mat[,-ncol(mat)]
+names(mat)[ncol(mat)] <- "group"
+
+library(reshape2)
+library(ggplot2)
+data.m <- melt(mat ,id="group")
+data.m$group <- factor(data.m$group)
+c <-  aggregate(value~group + variable,data.m,mean)
+
+#截短行名
+library(stringr)
+name=str_split(c$variable,';',simplify = T)[,c(3,4,5,6)] #取行名，以';'号分割，提取。
+name <- as.data.frame(name)
+name$names <- str_c(name[,2], name[,4],sep = ";")
+c$genus <- name$names
+c1 <-  aggregate(value~group + genus,c,mean)  #合并重复的，在提取目和属名后
+
+Mytheme <- theme_bw()+
+  theme(
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      line=element_line(size=1),
+      axis.text = element_text(size = 20, face ="bold"),
+      axis.text.x = element_text(size = 12, face ="bold", hjust = 1, colour = "black"),
+      axis.text.y = element_text(size = 10, face ="bold",  colour = "black"),
+      axis.title.x = element_text(size=14,face ="bold",colour = "black"),
+      axis.title.y =  element_text(size=14,face="bold",colour = "black"),
+      axis.line.x=element_line(size=0.5),
+      axis.line.y=element_line(size=0.5),
+      legend.key.size=unit(0.4,'cm'),
+      legend.title=element_text(size=12,face="bold",),
+      legend.text = element_text(size = 10,face = "bold") #,legend.position = "none"#是否删除图例
+      )
+
+p <- ggplot(c1, aes(value, genus, fill= group)) + geom_line(aes(group=genus)) + geom_point(shape=21,size=3,colour="black") + scale_fill_manual(values=c("#00AFBB","#FC4E07","#36BED9")) + theme(legend.position= c(0.75,0.1))+
+  theme(panel.grid = element_blank(),panel.background = element_rect(color = 'black', fill = 'transparent'),axis.text.y = element_text(size = 10, hjust = 1))+xlim(c(0,0.3))+Mytheme
+p
+
+#ggsave("./genus_differ_X80Cus2.pdf",p,width=6,height=8)
+
+
+```
+
+
+```{r 韦恩图}
+#韦恩图
+library(VennDiagram)
+Q235s2 <- row.names(Q235s2_enriched)
+Q235s3 <- row.names(Q235s3_enriched)
+X80Cus3 <- row.names(X80Cus3_enriched)
+X80Cus2 <- row.names(X80Cus2_enriched)
+Ps <- row.names(Ps_enriched)
+
+color_v <- c("dodgerblue",   "darkorange1","seagreen3","orchid3","darkred" )
+pdf(file="./venn5.pdf", onefile=FALSE, paper="special", width=5, height=5, pointsize=10)
+p=venn.diagram( x = list(Q235s2=Q235s2, Q235s3=Q235s3, X80Cus3=X80Cus3,X80Cus2=X80Cus2, Ps=Ps ),main.cex=2, resolution =
+    500, filename=NULL,fill = color_v[1:5])
+grid.draw(p)
+dev.off()
+```
+

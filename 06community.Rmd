@@ -1,0 +1,156 @@
+---
+title: "community"
+author: "Rheanna"
+date: "2019年11月18日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(reshape2)
+library(ggplot2)
+library(ggthemes)
+#BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+```
+
+```{r}
+design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+
+phylum <- read.table(file="../otu_table_filter100000_L2_correlation.txt",header=T,row.names=1,sep="\t")
+phylum <- t(phylum)
+
+#添加分组
+index_all = cbind(design[,c(3,5)], phylum[match(rownames(design), rownames(phylum)), ])
+
+idx1 <- design$group_Cu2%in% c("soil1","soil2","soil3","ps3","p3","Ms2","Ms3") 
+phylum1 <- index_all[idx1, ]
+data <- phylum1[,-2]
+
+names(data)[1] <- "group"
+data.m <- melt(data,id="group")
+
+# library(Rmisc)
+# Proteobacteria <- summarySE(phylum1,na.rm = TRUE, measurevar="p__Proteobacteria", groupvars=c("group_Cu2"))
+
+
+```
+
+```{r}
+colorpalette = c("#FFA500","#2E8B57","#FF4500","#4682B4","#800080", "#005c31","#708090","#990000","#F0F0F0","#5B8DA2","#155E7B","#BF2441","#20B2AA")
+
+#colorpalette<-c("#BF2441","#011526","#D7D9D8","#8B8C80","#731A1A","#F4B9B8","#EB593B","#B0DFE4","#000000","#FFFFFF","#5B8DA2","#155E7B","#F0F0F0","#F0D8D8")
+
+#排序
+data.m$variable=factor(data.m$variable,levels=c("p__Proteobacteria","p__Acidobacteria","p__Firmicutes","p__Chloroflexi","p__Nitrospirae","p__Crenarchaeota","p__Actinobacteria","p__WS3","p__NC10","p__Chlorobi","p__GAL15","p__Euryarchaeota","Other"))   
+
+###分组求平均
+c <-  aggregate(value~group + variable,data.m,mean)
+```
+
+```{r ggplot phylum}
+
+Mytheme <- theme_classic()+
+  theme(
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      line=element_line(size=1),
+      axis.text = element_text(size = 20, face ="bold"),
+      axis.text.x = element_text(size = 12, face ="bold",angle=45,  hjust = 1, colour = "black"),
+      axis.text.y = element_text(size = 12, face ="bold", hjust = 0.5, colour = "black"),
+      axis.title.x = element_text(size=14,face ="bold",colour = "black"),
+      axis.title.y =  element_text(size=14,face="bold",colour = "black"),
+      axis.line.x=element_line(size=0.5),
+      axis.line.y=element_line(size=0.5),
+      legend.key.size=unit(0.4,'cm'),
+      legend.title=element_text(size=12,face="bold",),
+      legend.text = element_text(size = 10,face = "bold") #,legend.position = "none"#是否删除图例
+      )
+
+
+##排序
+c$group <- factor(c$group,levels=c("P1","Q2351","X80Cu1","Q2352","Q235s2","X80Cu2","X80Cus2","P","Ps","Q2353","Q235s3","X80Cu3", "X80Cus3"))
+
+a <- ggplot(c, aes(x=factor(group),value, fill=variable))+
+  geom_bar(stat="identity",position="fill",size=0.6,width=0.8)+Mytheme+
+  xlab("Soil")+ ylab("Phylum")+labs(fill="Phylum")+
+  scale_fill_manual(values=colorpalette)+ 
+  guides(fill = guide_legend(reverse = FALSE))
+a
+
+#ggsave("./community_phylum.pdf",a,width=5,height=4)
+```
+
+```{r order data}
+#order
+design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+
+order <- read.table(file="../otu_table_filter100000_L4_0802.txt",header=T,row.names=1,sep="\t")
+order_t <- t(order)
+
+#添加分组
+index_all = cbind(design[,c(3,5)], order_t[match(rownames(design), rownames(order_t)), ])
+idx1 <- design$group_Cu2%in% c("soil1","soil2","soil3","ps3","p3","Ms2","Ms3") 
+order <- index_all[idx1, ]
+data <- order[,-2]
+#修改分组名
+names(data)[1] <- "group"
+#数据转换
+data.m <- melt(data,id="group")
+
+
+#index_order1 <- matrix(as.numeric(index_order[,3:52]),nrow=nrow(index_order))#转换为数值型的
+#rownames(index_order1) <- rownames(index_order)
+#colnames(index_order1) <- colnames(index_order[,3:52])
+
+
+```
+
+```{r}
+
+#genus.m$value1 <- cut(genus.m$value,breaks = c(-Inf,0:1,Inf),right = FALSE)
+data.m$value2<-scale(data.m$value,center=T,scale=T)
+#genus.m$value4<- cut(genus.m$value,breaks=10,dig.lab=2)
+#genus.m$Relative_abundance <- genus.m$value5
+c <-  aggregate(value~group + variable,data.m,mean)
+
+#
+#Gallionellales <- summarySE(index_order,na.rm = TRUE, measurevar="Gallionellales", groupvars=c("group_Cu2"))
+
+##排序
+c$group <- factor(c$group,levels=c("P1","Q2351","X80Cu1","Q2352","Q235s2","X80Cu2","X80Cus2","P","Ps","Q2353","Q235s3","X80Cu3", "X80Cus3"))
+
+c$relative_abundance<-cut(c$value,breaks=c(0,0.0001,0.0005,0.001,0.005,0.01,0.05,0.2,0.8),include.lowest=TRUE,label=c("(0,0.0001)","(0.0001,0.0005)","(0.0005,0.001)","(0.001,0.005)","(0.005,0.01)","(0.01,0.05)","(0.05,0.2)","(0.2,0.8)"))  
+Mytheme <- theme_classic()+
+  theme(
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      panel.background = element_rect(color = 'black', fill = 'transparent'),
+      line=element_line(size=1),
+      axis.text = element_text(size = 20, face ="bold"),
+      axis.text.x = element_text(size = 12, face ="bold",angle=45,  hjust = 1, colour = "black"),
+      axis.text.y = element_text(size = 12, face ="bold", colour = "black"),
+      axis.title.x = element_text(size=14,face ="bold",colour = "black"),
+      axis.title.y =  element_text(size=14,face="bold",colour = "black"),
+      axis.line.x=element_line(size=0.5),
+      axis.line.y=element_line(size=0.5),
+      legend.key.size=unit(0.4,'cm'),
+      legend.title=element_text(size=12,face="bold",),
+      legend.text = element_text(size = 12,face = "bold") #,legend.position = "none"#是否删除图例
+      )
+
+
+g <- ggplot(c, aes(x=group,y=variable))+geom_tile(aes(fill=relative_abundance),color="white",size=0.1)+
+    xlab("Order") + ylab("Soil")+labs(fill="Range")+Mytheme+
+  scale_fill_manual(breaks=c("(0,0.0001)","(0.0001,0.0005)","(0.0005,0.001)","(0.001,0.005)","(0.005,0.01)","(0.01,0.05)","(0.05,0.2)","(0.2,0.8)"),values = c("lightgrey","grey50","lightblue",  "darkgreen","steelblue","orange","red", "darkred"))
+g
+#ggsave("./community_order.pdf",g,width=6,height=8)
+
+
+```
+
+
+

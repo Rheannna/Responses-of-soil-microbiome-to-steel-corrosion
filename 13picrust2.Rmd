@@ -1,0 +1,377 @@
+---
+title: "TAX4FUN_DIFFER"
+author: "Rheanna"
+date: "2020年03月04日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message  = F) 
+
+```
+
+
+```{r}
+rm(list=ls())
+library(vegan)
+library(edgeR)
+```
+
+```{r}
+
+#分组
+design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+design <- subset(design, group_Cu2!="ss")
+
+
+
+#Picrust预测
+order <- read.table(file="../pred_metagenome_unstrat.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(design)
+order <- order[,c]
+
+#sum <- colSums(order)
+
+
+#所有的otu
+#otu_all <-read.table(file="../otu_table.txt",header=T,row.names=1,sep="\t")
+
+
+#1 pathway
+pathway <-read.table(file="./path_abun_unstrat.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(design)
+data <- pathway[,c]
+#sum <- colSums(pathway)
+
+
+#2 与氮循环相关的KO
+nitro_cycle <-read.table(file="./nitrogen_cycle_gene_ko.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(nitro_cycle)
+data <- order[c,]
+
+
+
+# 3 与硫循环相关的KO
+sulfur_cycle <-read.table(file="./sulfur_cycle_ko.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(sulfur_cycle)
+sulfur_cycle$genus <- rownames(sulfur_cycle)
+data <- order[c,]
+
+
+# 4 与呼吸链相关的KO
+electron_transfer <-read.table(file="./electron_transfer.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(electron_transfer)
+electron_transfer$genus <- rownames(electron_transfer)
+data <- order[c,]
+
+
+# 5 与生物膜形成相关的KO
+biofilm <-read.table(file="./biofilm_gene.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(biofilm)
+biofilm$genus <- rownames(biofilm)
+data <- order[c,]
+
+
+# 6 与铁循环相关以及重金属抗性相关的KO
+iron_cycle <-read.table(file="./iron_cycle_ko.txt",header=T,row.names= 1,sep="\t")
+c <- row.names(iron_cycle)
+iron_cycle$genus <- rownames(iron_cycle)
+data <- order[c,]
+
+
+
+
+# #FAPROTAX 预测
+# order <- read.table(file="./2019113/picrust2_out_pipeline/for_PFAPROTAX/all_differ_mswithm_pswithp_func.txt",header=T,row.names= 1,sep="\t")
+# 
+# #所有的otu
+# otu_all <- read.table(file="./2019113/picrust2_out_pipeline/for_PFAPROTAX/all_differ_genus.txt",header=T,row.names= 1,sep="\t")
+# 
+# #
+# or <- match(colnames(otu_all), colnames(order)) #对齐列
+# order <- order[,or]
+# sum <- as.list(colSums(otu_all))  #矩阵应该和列表相乘除
+# order_count <- order*sum #各个属的count
+
+
+```
+
+####index
+
+```{r edgeR}
+
+#去掉NA
+data <- na.omit(data)
+
+ #对齐环境因子
+# create DGE list
+idx <- design$Description %in% c("Q2352","Q235s2")
+# create DGE list
+design_subset <- design[idx, ]
+
+otu_table_subset <- data[ ,idx]  
+
+#write.table(otu_table_subset,file="./2019113/picrust2_out_pipeline/KO_metagenome_out/soil2_Ms2__nitro_func_all.txt",sep="\t",col.names = NA)
+
+
+### Generalized Linear Model (GLM)
+# create DGE list
+groups <- design_subset$Description
+groups<- factor(groups)
+
+d = DGEList(counts=otu_table_subset, group=groups)
+
+##标准化
+d = calcNormFactors(d)
+logcpm <- cpm(d, prior.count=2, log=TRUE)
+
+# 生成实验设计矩阵
+design.mat<-model.matrix(~0 + d$samples$group)
+colnames(design.mat)=levels(groups)
+d2 = estimateGLMCommonDisp(d, design.mat)
+d2=estimateGLMTrendedDisp(d2, design.mat)
+d2 = estimateGLMTagwiseDisp(d2, design.mat)
+#构建一个基因表达值的广义线性模型，这里是OTU的丰度模型。
+d2<-na.omit(d2)
+fit = glmQLFit(d2, design.mat)
+qlf <- glmQLFTest(fit,coef=2)
+topTags(qlf)
+
+# 设置比较组
+# 组间似然比检验比较,统计Fold change, Pvalue
+#-------------------------------------------------------
+lrt <- glmLRT(fit,contrast=c(-1,1))
+# FDR检验，控制假阳性率小于5%
+de_lrt <- decideTestsDGE(lrt, adjust.method="fdr", p.value=0.05)
+# 导出计算结果
+x=lrt$table
+x$sig=de_lrt
+a <- as.data.frame(x$sig)
+names(a)[1] <- "sig"
+enriched = row.names(subset(a,sig==1))
+depleted = row.names(subset(a,sig==-1))
+
+enriched
+depleted
+
+
+#write.table(enriched_otu,file="./2019113/picrust2_out_pipeline/KO_metagenome_out/soil2_Ms2_enriched_nitro_func.txt",sep="\t",col.names = NA)
+enriched_iron_X80Cus2 <- enriched
+depleted_iron_X80Cus2<- depleted
+enriched_iron_Q235s2 <- enriched
+depleted_iron_Q235s2<- depleted
+
+enriched_iron_X80Cus3 <- enriched #
+depleted_iron_X80Cus3<- depleted #0
+
+enriched_iron_Q235s3 <- enriched
+depleted_iron_Q235s3<- depleted  #0
+
+enriched_iron_Ps <- enriched  #0
+depleted_iron_Ps <- depleted #0
+
+
+save(enriched_iron_X80Cus2,depleted_iron_X80Cus2,enriched_iron_Q235s2,depleted_iron_Q235s2,enriched_iron_Q235s3,file="./iron_cycle_differ.Rdata"  )
+
+save(enriched_electron_X80Cus2,depleted_electron_X80Cus2,enriched_electron_Q235s2,depleted_electron_Q235s2,enriched_electron_Q235s3,enriched_electron_Ps,file="./electron_cycle_differ.Rdata"  )
+
+save(enriched_biofilm_X80Cus3,enriched_biofilm_X80Cus2,depleted_biofilm_X80Cus2,enriched_biofilm_Q235s2,depleted_biofilm_Q235s2,enriched_biofilm_Q235s3,enriched_biofilm_Ps,file="./biofilm_cycle_differ.Rdata"  )
+
+save(enriched_S_X80Cus2,depleted_S_X80Cus2,enriched_S_Q235s2,depleted_S_Q235s2,enriched_S_Q235s3,enriched_S_Ps,file="./S_cycle_differ.Rdata"  )
+
+
+#write.table(depleted_otu,file="./2019113/picrust2_out_pipeline/KO_metagenome_out/soil2_Ms2_depleted_nitro_func.txt",sep="\t",col.names = NA)
+
+
+
+
+
+```
+
+
+```{r}
+  
+
+load(file='./N_cycle_differ.Rdata')
+load(file='./electron_cycle_differ.Rdata')
+
+load(file='./biofilm_cycle_differ.Rdata')
+
+load(file='./iron_cycle_differ.Rdata')
+
+load(file='./S_cycle_differ.Rdata')
+# v1 = enriched_iron_X80Cus2
+# v2 = depleted_iron_X80Cus2
+# v3 = enriched_iron_Q235s2
+# v4 = depleted_iron_Q235s2
+# v5 = enriched_iron_Q235s3
+# 
+# v1 = enriched_biofilm_Q235s2
+# v2 = enriched_biofilm_Q235s3
+# v3 = enriched_biofilm_X80Cus2
+# v4 = enriched_biofilm_X80Cus3
+
+# v1 = enriched_electron_Q235s2
+# v2 = enriched_electron_Q235s3
+# v3 = enriched_electron_X80Cus2
+# v4 = enriched_electron_Ps
+
+# v1 = enriched_S_Q235s2
+# v2 = enriched_S_Q235s3
+# v3 = enriched_S_X80Cus2
+# v4 = enriched_S_Ps
+
+
+  #求多个向量并集
+  union = Reduce(union,  list(v1 = v1,
+                              v2 = v2,
+                              v3 = v3,
+                              v4 = v4)
+                 )
+  
+  dat <- data[union, ]
+  
+  sum <- as.list(colSums(order))  #矩阵应该和列表相乘除
+  order_ab <- order/sum   #相对丰度
+  
+  dat_ab <- order_ab[row.names(dat),]
+  dat_ab <- dat_ab*100
+  
+```
+
+```{r 按组取平均}
+###分组
+design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+design <- subset(design, group_Cu2!="ss")
+
+grp1 = unique(design$Description);grp1
+grp<-list()       
+for (i in c(1:length(grp1))){
+  a<-as.vector(grp1[[i]])
+  grp[[i]] <- rownames(design[which(design$Description==a), ])
+  #grp[[i]]<-rownames(list.dat)[which(first.group==a)]
+}
+grp
+names(grp)<-grp1 ; names(grp)
+
+
+samp<-colnames(dat_ab) ; samp
+
+da = matrix(0, nrow=length(rownames(dat_ab)), ncol=length(grp))
+####按分组取平均
+for (x in c(1:(length(grp)))) {
+  list1 = grp[[x]];
+  col1 = pmatch(list1, samp)
+  dat1 = dat_ab[, col1]
+  dat =rowSums(dat1)/length(list1)
+  dat =as.matrix(dat)
+  da[,x] = dat
+}
+rownames(da) <- rownames(dat)
+colnames(da) <- grp1
+da
+genus_av <- as.data.frame(da)
+
+# #分为富集组和deplete组
+# genus_av$group <- ifelse(genus_av$Q2352 > genus_av$Q235s2,"depleted","enriched")
+
+genus_av$genus <- row.names(genus_av)
+
+
+#合并基因名以及丰度信息
+#df <- merge(iron_cycle,genus_av,by = "genus", all.y=TRUE)
+
+#df <- merge(biofilm,genus_av,by = "genus", all.y=TRUE)
+
+# df <- merge(electron_transfer,genus_av,by = "genus", all.y=TRUE)
+
+df <- merge(sulfur_cycle,genus_av,by = "genus", all.y=TRUE)
+
+#将KO编号和基因名合并
+library(dplyr)
+df$gene_name <- paste(df$genus,df$gene,sep="")
+
+df <- df[,-(1:3)]
+
+```
+
+
+
+
+
+
+
+
+```{r 气泡图}
+
+
+library(reshape2)
+library(ggplot2)
+#df$metal <- ordered(df$metal,levels = c("iron(III)", "iron(II)","Cu","Mo","Co/Zn/Cd"))
+genus_log.m <- melt(df)
+
+#genus_log.m$value1 <- cut(genus_log.m$value,breaks = c(-Inf,0:1,Inf),right = FALSE)
+#genus_log.m$value2<-scale(genus_log.m$value,center=T,scale=F)
+#genus_log.m$value2<-scale(genus_log.m$value,center=F,scale=T)
+#genus_log.m$value4<- cut(genus_log.m$value,breaks=10,dig.lab=2)
+genus_log.m$Relative_abundance <- genus_log.m$value
+#genus_log.m$value5<-cut(genus_log.m$value,breaks=c(0,0.1,1,5,10,30,50),include.lowest=TRUE,
+#                   label=c("(0,0.1)","(0.1,1)","(1,5)","(5,10)","(10,30)","(30,50)")) 
+
+palette1 = c("#4682B4","#FF4500","#FFA500","#73BF00","darkred","#57C3C2","#426600")
+#按组标记颜色
+# p <- ggplot(genus_log.m, aes(x=variable, y=gene_name))+     
+#   geom_point(aes(size=Relative_abundance,color=metal),alpha=0.9)+
+#   xlab("sample") + ylab("KO")+theme_bw()+
+#   theme(axis.text.x = element_text(size = 10, angle = 60, hjust =1),axis.text.y = element_text(size = 8, hjust = 1),legend.title = element_text(size=8))+scale_size_continuous(range=c(1,6))
+# p
+
+p <- ggplot(genus_log.m, aes(x=variable, y=gene_name))+     
+  geom_point(aes(size=Relative_abundance),color="#4682B4",alpha=0.9)+
+  xlab("sample") + ylab("KO")+theme_bw()+
+  theme(axis.text.x = element_text(size = 10, angle = 60, hjust =1),axis.text.y = element_text(size = 8, hjust = 1),legend.title = element_text(size=8))+scale_size_continuous(range=c(1,10))
+p
+
+#+scale_size_continuous(range=c(1,10))控制点的大小范围
+ggsave("./iron_differ.pdf",p,width=5,height=4)
+
+```
+
+
+
+```{r}
+#哑铃图
+
+Q235s <- read.table(file="./2019112/p3_ps3.txt",header=T,row.names=1,sep="\t")
+design <- read.table("./20180308-201804 R result/beta/beta10000/design31.txt", header=T, row.names= 1, sep="\t")
+otu_all <- read.table("./20180308-201804 R result/otu_table.txt", header=T, row.names= 1, sep="\t")
+#
+or <- match(colnames(otu_all), colnames(Q235s)) #对齐列
+genus <- Q235s[,or]
+sum <- as.list(colSums(otu_all))  #矩阵应该和列表相乘除
+order_count <- genus/sum #各个科的相对丰度
+
+sub_design = design[rownames(design) %in% colnames(order_count) ,] #对齐环境因子
+order_count = order_count[, rownames(sub_design)]
+
+# 
+idx <- design$group_Cu2%in% c("ps3","p3") 
+design_subset <- design[idx, ]
+
+otu_table_subset <- order_count[ ,idx] 
+otu_q235 <- cbind(design_subset[,c("group_Cu2","group_soil1")],t(otu_table_subset))
+otu_q235 <- otu_q235[,-2]
+
+library(reshape2)
+otu_q235.m <- melt(otu_q235,id="group_Cu2")
+otu_q235.m$group_Cu2 <- factor(otu_q235.m$group_Cu2,levels=c("ps3","p3"))
+c <-  aggregate(value~group_Cu2 + variable,otu_q235.m,mean)
+
+p <- ggplot(c, aes(value, variable, fill= group_Cu2)) + geom_line(aes(group=variable)) + geom_point(shape=21,size=3,colour="black") + scale_fill_manual(values=c("#00AFBB","#FC4E07","#36BED9"))+
+  theme(axis.text.x = element_text(size = 8, hjust = 1),panel.grid = element_blank(),panel.background = element_rect(color = 'black', fill = 'transparent'),axis.text.y = element_text(size = 10, hjust = 1))
+#ggsave("./2019113/genus_differ_ps.pdf",p,width=6,height=6)
+
+
+```

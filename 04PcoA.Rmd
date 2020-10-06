@@ -1,0 +1,289 @@
+---
+title: "PcoA"
+author: "HY"
+date: "2019年10月22日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+###------------------------weighted unifrac--------------------
+rm(list=ls())
+Sys.setenv(R_MAX_NUM_DLLS=999)
+options(stringsAsFactors = F)  
+#
+
+
+design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
+
+otu_al20 = read.table("../otu_table_filter_al20.txt", header=T, row.names= 1, sep="\t")
+#otu_norm <- read.table(file="../otu_table_freqs.txt",header=T,row.names=1,sep="\t")
+#otu_al20 <- otu_norm[row.names(otu_al20),]
+
+
+
+
+```
+
+```{r eval=TRUE, include=FALSE}
+
+library(ggplot2)
+library(ellipse)
+library(gridExtra)
+library(plyr)
+library(ggthemes)
+#devtools::install_github('cttobin/ggthemr')
+#library(ggthemr)
+library(jpeg)
+library(scales)
+library(vegan)
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+# install.packages("BiocManager")
+#BiocManager::install("phyloseq"))
+library(phyloseq)
+library(ggsignif)
+    
+```
+
+
+
+
+```{r NMDS分析}
+
+#NMDS分析
+
+#数据预处理，log2(al_20+1)
+otu_al20_log <- log2(otu_al20+1)
+otu_al20_t <- t(otu_al20_log)
+#筛选样本
+index = cbind(design[,c("timegroup","Description")], otu_al20_t[match(rownames(design), rownames(otu_al20_t)), ])
+
+#201704
+data1 <- subset(index,Description%in%c("P","Ps","Q2353","Q235s3","X80Cu3","X80Cus3"))
+
+#201611
+data2 <- subset(index,Description%in%c("Q2352","Q235s2","X80Cu2","X80Cus2"))
+
+
+#201605
+data3 <- subset(index,Description%in%c("Q2351","X80Cu1","P1"))
+
+
+# data <- rbind(data1,data2,data3)
+# save(index, data, data1, data2, data3, file = './input.Rdata')
+
+
+
+#去掉环境因子信息
+data_bat <- data2
+dat <- data_bat[,-(1:2)]
+#去掉为0的行
+dat <- dat[which(rowSums(dat)>0), ]
+#计算距离
+otu_bray <- vegdist(dat,method="bray")
+#nmds分析
+mds <- metaMDS(otu_bray,k=4,eig=T)
+#前4轴
+scores <- as.data.frame(mds$points[,1:4])
+#加分组信息
+nmds.aw <- cbind(data_bat[,1:2], scores[match(rownames(data_bat), rownames(scores)), ])
+names(nmds.aw)[1] <- "group"
+
+
+```
+
+
+```{r 统计检验}
+
+library(EasyAovWlxPlot)
+
+
+
+data <- nmds.aw
+#改列名
+data <- cbind(row.names(data), data)
+names(data)[1] <- "sample"
+table(data[,"group"])
+data[,"group"] <- as.factor(data[,"group"])
+
+#多指标检验正态分布和方差齐性
+normtest <- MuiNorCV(data, num = c(3:6),method_cv = "leveneTest")
+normtest
+
+
+#不满足正态分布和方差齐的差异分面箱线图
+result = MuiKwWlx(data = data,num = c(3:6))
+result
+
+
+# #满足正态分布和方差齐的差异分面箱线图
+# result = MuiaovMcomper(data = data,num = c(3:6),method_Mc = "Tukey")
+# result
+
+result1 = FacetMuiPlotresultBox(data = data,num = c(3:6),result = result,sig_show ="line",ncol = 2 )
+result1[[1]] + theme_bw()
+
+```
+
+
+```{r NMDS_ggplot画图}
+
+
+#ggplot画图
+
+#201704排序
+nmds.aw$group <- factor(nmds.aw$group,levels=c("P","Ps","Q2353","Q235s3","X80Cu3","X80Cus3") )
+
+#201611
+nmds.aw$group <- factor(nmds.aw$group,levels=c("Q2352","Q235s2","X80Cu2","X80Cus2") )
+
+library(ggrepel) #防止标签重叠 geom_text_repel
+
+Mytheme <- theme_par()+
+  theme(
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      plot.title = element_text(vjust = -1,hjust = 0.1),
+      line=element_line(size=1),
+      axis.text = element_text(size = 20, face ="bold"),
+      axis.text.x = element_text(size = 10, face ="bold", hjust = 0.5, colour = "black"),
+      axis.text.y = element_text(size = 12, face ="bold", hjust = 0.5, colour = "black"),
+      axis.title.x = element_text(size=14,face ="bold",colour = "black"),
+      axis.title.y =  element_text(size=16,face="bold",colour = "black"),
+      axis.line.x=element_line(size=0.5),
+      axis.line.y=element_line(size=0.5),
+      legend.key.size=unit(0.4,'cm'),
+      legend.text = element_text(size = 12,face = "bold")#,legend.position = "none"#是否删除图例
+      )
+
+#加标签 +geom_text(aes(x = MDS1,y =MDS2-0.02,label=group_Cu2),size=1.5)
+
+g <- ggplot(nmds.aw,aes(x = MDS1,y = MDS2,  color = group ))  + theme(legend.title=element_blank(),legend.text =element_text(size=8))+ geom_point(alpha = 0.7) + labs(x=paste("NMDS1"), y=paste("NMDS2"),title = "NMDS plot of bray curtis distance")+scale_color_calc()+Mytheme 
+g
+#ggsave(paste("./201704_NMDS.pdf", sep=""), g, width = 6, height = 4.5)
+
+```
+
+
+####距离矩阵
+```{r PcoA}
+
+#不能将距离矩阵拆分
+
+
+#PcoA分析
+pcoa.aw <- cmdscale(otu_bray , k=10, eig=T)
+points.aw <- as.data.frame(pcoa.aw$points)
+colnames(points.aw) <- c("x", "y", "z","d","c","f","g","h","i","j")
+eig.aw <- pcoa.aw$eig
+
+points.aw <- cbind(data_bat[,1:2], points.aw[match(rownames(data_bat), rownames(points.aw)), ])
+names(points.aw)[2] <- "group"
+
+
+#201703
+points.aw1 <- subset(points.aw,group%in%c("P","Ps","Q2353","Q235s3","X80Cu3","X80Cus3"))
+
+#201611
+points.aw1 <- subset(points.aw,group%in%c("Q2352","Q235s2","X80Cu2","X80Cus2"))
+
+
+
+```
+
+
+## Plots
+
+
+```{r PcoA_plot, echo=TRUE}
+
+library(ggrepel) #防止标签重叠 geom_text_repel
+
+Mytheme <- theme_par()+
+  theme(
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      plot.title = element_text(vjust = -8.5,hjust = 0.1),
+      line=element_line(size=1),
+      axis.text = element_text(size = 20, face ="bold"),
+      axis.text.x = element_text(size = 10, face ="bold", hjust = 0.5, colour = "black"),
+      axis.text.y = element_text(size = 12, face ="bold", hjust = 0.5, colour = "black"),
+      axis.title.x = element_text(size=14,face ="bold",colour = "black"),
+      axis.title.y =  element_text(size=16,face="bold",colour = "black"),
+      axis.line.x=element_line(size=0.5),
+      axis.line.y=element_line(size=0.5),
+      legend.key.size=unit(0.4,'cm'),
+      legend.text = element_text(size = 12,face = "bold")#,legend.position = "none"#是否删除图例
+      )
+
+g <- ggplot(points.aw1,aes(x = x,y = y,  color = group )) + 
+  geom_point(alpha = 0.7,size=4) +geom_text_repel(aes(x = x,y =y-0.01,label=group),size=3)+ labs(x=paste("PCoA 1 (", format(100 * eig.aw[1] / sum(eig.aw), digits=4), "%)", sep=""), y=paste("PCoA 2 (", format(100 * eig.aw[2] / sum(eig.aw), digits=4), "%)", sep=""),title = "PCoA plot of Bray Curtis distance")+scale_color_calc()+Mytheme #+stat_ellipse(level = 0.8)
+g
+#ggsave(paste("./X80Cu_Q235_201704_PcoA.pdf", sep=""), g, width = 8, height = 6)
+```
+
+##scatterplot3d 三维散点图
+```{r 三维散点图}
+library("scatterplot3d")
+
+#colors <- c("#999999", "#E69F00", "#56B4E9")
+
+scatterplot3d(points.aw1[,1:3], pch = 16,color = points.aw1$timegroup,labels=points.aw1$materialgroup)
+
+
+```
+
+
+
+##pairwise.adonis
+
+```{r pairwise.adonis}
+
+##factors可以是data1$group_Cu2，但是不可以是data1[1]
+
+pairwise.adonis <- function(x,factors, sim.function = 'vegdist', sim.method = 'bray', p.adjust.m ='fdr')
+{
+library(vegan)
+
+#不放回抽样,5个里面随机选出2个，C5 ^ 2事件
+co = combn(unique(as.character(factors)),2)
+pairs = c()
+F.Model =c()
+R2 = c()
+p.value = c()
+
+
+for(elem in 1:ncol(co)){
+if(sim.function == 'daisy'){
+library(cluster); x1 = daisy(x[factors %in% c(co[1,elem],co[2,elem]),],metric=sim.method)
+} else{x1 = vegdist(x[factors %in% c(co[1,elem],co[2,elem]),],method=sim.method)}
+
+ad = adonis(x1 ~ factors[factors %in% c(co[1,elem],co[2,elem])] );
+pairs = c(pairs,paste(co[1,elem],'vs',co[2,elem]));
+F.Model =c(F.Model,ad$aov.tab[1,4]);
+R2 = c(R2,ad$aov.tab[1,5]);
+p.value = c(p.value,ad$aov.tab[1,6])
+}
+p.adjusted = p.adjust(p.value,method=p.adjust.m)
+sig = c(rep('',length(p.adjusted)))
+sig[p.adjusted <= 0.05] <-'.'
+sig[p.adjusted <= 0.01] <-'*'
+sig[p.adjusted <= 0.001] <-'**'
+sig[p.adjusted <= 0.0001] <-'***'
+
+pairw.res = data.frame(pairs,F.Model,R2,p.value,p.adjusted,sig)
+print("Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1")
+return(pairw.res)
+
+} 
+```
+
+
+```{r}
+a = pairwise.adonis(dat,nmds.aw$group)
+write.table(file="./X80Cu_Q235_201611_NMDS_adonis.txt", a)
+```
