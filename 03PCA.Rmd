@@ -48,12 +48,12 @@ data_all <- index_new[,c("Description","shannon","Cr","Cu","Fe","Mn","Mo","Ni","
 names(data_all)[1] <- "group"
 
 
-# #X80Cu 和Q235对比2
+# #X80Cu Q235
  data1 <- subset(data_all, group %in% c("Q2352","X80Cu2","Q235s2", "X80Cus2"))
  data2 <- subset(data_all, group %in% c("Q2353","Q235s3" ,"X80Cu3", "X80Cus3","P","Ps"))
  data3 <-  subset(data_all, group %in% c("X80Cu1", "Q2351","P1"))
  
-##X80Cu 和Q235对比3
+##X80Cu Q235
  data1 <- subset(data_all, group %in% c("Q2352","Q235s2","Q2353","Q235s3","P","Ps" ))
  data2 <- subset(data_all, group %in% c("X80Cu2","X80Cus2","X80Cu3", "X80Cus3","P","Ps"))
 
@@ -75,7 +75,7 @@ a1
 ```{r}
 palette1 = c("#4682B4","#FF4500","#FFA500","#73BF00","darkred","#57C3C2","#426600")
 # #palette1 = c("#FFA500","#2E8B57","#FF4500","#4682B4","#800080","#708090","#F5F5F5", "#FFA500","#2E8B57","#9ACD32","#808080","#778899","#20B2AA")
-# 排序
+# 
 # index_new$group_Cu2 <- ordered(index_new$group_Cu2, levels = c("soil1","soil2","Ms2","soil3","Ms3","p3","ps3"))
 # 
 # index_new$group_Cu <- ordered(index_new$group_Cu, levels = c("soil1","Q235","Q235s","X80Cu","X80Cus","p3","ps3"))
@@ -137,7 +137,7 @@ corrplot(var$cos2, method="square",is.corr=FALSE,tl.cex=2,tl.col="black",number.
 ```
 
 ```{r}
-#距离差异检验 
+#
 library(vegan)
 
 subindex = subset(data1, group %in% c("X80Cus2","X80Cu2"))
@@ -155,13 +155,13 @@ adonis_pvalue
 ##pairwise.adonis
 
 ```{r}
-##factors可以是data1$group_Cu2，但是不可以是data1[1]
+##factors
 
 pairwise.adonis <- function(x,factors, sim.function = 'vegdist', sim.method = 'bray', p.adjust.m ='fdr')
 {
 library(vegan)
 
-#不放回抽样,5个里面随机选出2个，C5 ^ 2事件
+#C5 ^ 2
 co = combn(unique(as.character(factors)),2)
 pairs = c()
 F.Model =c()
@@ -212,7 +212,7 @@ Tukey_HSD_observed_otus_table
 
 ```{r}
 
-#用ANOSIM进行显著性分析（下例为比较A和B）
+#ANOSIM
 anosim(otu1,group,permutations = 999, distance = "bray")  
 ```
 
