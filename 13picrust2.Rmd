@@ -21,13 +21,13 @@ library(edgeR)
 
 ```{r}
 
-#分组
+#
 design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
 design <- subset(design, group_Cu2!="ss")
 
 
 
-#Picrust预测
+#Picrust
 order <- read.table(file="../pred_metagenome_unstrat.txt",header=T,row.names= 1,sep="\t")
 c <- row.names(design)
 order <- order[,c]
@@ -35,7 +35,7 @@ order <- order[,c]
 #sum <- colSums(order)
 
 
-#所有的otu
+#
 #otu_all <-read.table(file="../otu_table.txt",header=T,row.names=1,sep="\t")
 
 
@@ -46,35 +46,35 @@ data <- pathway[,c]
 #sum <- colSums(pathway)
 
 
-#2 与氮循环相关的KO
+#2 N KO
 nitro_cycle <-read.table(file="./nitrogen_cycle_gene_ko.txt",header=T,row.names= 1,sep="\t")
 c <- row.names(nitro_cycle)
 data <- order[c,]
 
 
 
-# 3 与硫循环相关的KO
+# 3 S KO
 sulfur_cycle <-read.table(file="./sulfur_cycle_ko.txt",header=T,row.names= 1,sep="\t")
 c <- row.names(sulfur_cycle)
 sulfur_cycle$genus <- rownames(sulfur_cycle)
 data <- order[c,]
 
 
-# 4 与呼吸链相关的KO
+# 4 E KO
 electron_transfer <-read.table(file="./electron_transfer.txt",header=T,row.names= 1,sep="\t")
 c <- row.names(electron_transfer)
 electron_transfer$genus <- rownames(electron_transfer)
 data <- order[c,]
 
 
-# 5 与生物膜形成相关的KO
+# 5  
 biofilm <-read.table(file="./biofilm_gene.txt",header=T,row.names= 1,sep="\t")
 c <- row.names(biofilm)
 biofilm$genus <- rownames(biofilm)
 data <- order[c,]
 
 
-# 6 与铁循环相关以及重金属抗性相关的KO
+# 6 
 iron_cycle <-read.table(file="./iron_cycle_ko.txt",header=T,row.names= 1,sep="\t")
 c <- row.names(iron_cycle)
 iron_cycle$genus <- rownames(iron_cycle)
@@ -83,17 +83,17 @@ data <- order[c,]
 
 
 
-# #FAPROTAX 预测
+# #FAPROTAX 
 # order <- read.table(file="./2019113/picrust2_out_pipeline/for_PFAPROTAX/all_differ_mswithm_pswithp_func.txt",header=T,row.names= 1,sep="\t")
 # 
-# #所有的otu
+# #
 # otu_all <- read.table(file="./2019113/picrust2_out_pipeline/for_PFAPROTAX/all_differ_genus.txt",header=T,row.names= 1,sep="\t")
 # 
 # #
-# or <- match(colnames(otu_all), colnames(order)) #对齐列
+# or <- match(colnames(otu_all), colnames(order)) #
 # order <- order[,or]
-# sum <- as.list(colSums(otu_all))  #矩阵应该和列表相乘除
-# order_count <- order*sum #各个属的count
+# sum <- as.list(colSums(otu_all))  #
+# order_count <- order*sum #count
 
 
 ```
@@ -102,10 +102,10 @@ data <- order[c,]
 
 ```{r edgeR}
 
-#去掉NA
+#NA
 data <- na.omit(data)
 
- #对齐环境因子
+ #
 # create DGE list
 idx <- design$Description %in% c("Q2352","Q235s2")
 # create DGE list
@@ -123,29 +123,29 @@ groups<- factor(groups)
 
 d = DGEList(counts=otu_table_subset, group=groups)
 
-##标准化
+##
 d = calcNormFactors(d)
 logcpm <- cpm(d, prior.count=2, log=TRUE)
 
-# 生成实验设计矩阵
+# 
 design.mat<-model.matrix(~0 + d$samples$group)
 colnames(design.mat)=levels(groups)
 d2 = estimateGLMCommonDisp(d, design.mat)
 d2=estimateGLMTrendedDisp(d2, design.mat)
 d2 = estimateGLMTagwiseDisp(d2, design.mat)
-#构建一个基因表达值的广义线性模型，这里是OTU的丰度模型。
+#
 d2<-na.omit(d2)
 fit = glmQLFit(d2, design.mat)
 qlf <- glmQLFTest(fit,coef=2)
 topTags(qlf)
 
-# 设置比较组
-# 组间似然比检验比较,统计Fold change, Pvalue
+# 
+# 
 #-------------------------------------------------------
 lrt <- glmLRT(fit,contrast=c(-1,1))
-# FDR检验，控制假阳性率小于5%
+# FDR
 de_lrt <- decideTestsDGE(lrt, adjust.method="fdr", p.value=0.05)
-# 导出计算结果
+# 
 x=lrt$table
 x$sig=de_lrt
 a <- as.data.frame(x$sig)
@@ -224,7 +224,7 @@ load(file='./S_cycle_differ.Rdata')
 # v4 = enriched_S_Ps
 
 
-  #求多个向量并集
+  #
   union = Reduce(union,  list(v1 = v1,
                               v2 = v2,
                               v3 = v3,
@@ -233,16 +233,16 @@ load(file='./S_cycle_differ.Rdata')
   
   dat <- data[union, ]
   
-  sum <- as.list(colSums(order))  #矩阵应该和列表相乘除
-  order_ab <- order/sum   #相对丰度
+  sum <- as.list(colSums(order))  #
+  order_ab <- order/sum   #
   
   dat_ab <- order_ab[row.names(dat),]
   dat_ab <- dat_ab*100
   
 ```
 
-```{r 按组取平均}
-###分组
+```{r }
+###
 design <- read.table("./design31.txt", header=T, row.names= 1, sep="\t")
 design <- subset(design, group_Cu2!="ss")
 
@@ -260,7 +260,7 @@ names(grp)<-grp1 ; names(grp)
 samp<-colnames(dat_ab) ; samp
 
 da = matrix(0, nrow=length(rownames(dat_ab)), ncol=length(grp))
-####按分组取平均
+####
 for (x in c(1:(length(grp)))) {
   list1 = grp[[x]];
   col1 = pmatch(list1, samp)
@@ -274,13 +274,13 @@ colnames(da) <- grp1
 da
 genus_av <- as.data.frame(da)
 
-# #分为富集组和deplete组
+# #
 # genus_av$group <- ifelse(genus_av$Q2352 > genus_av$Q235s2,"depleted","enriched")
 
 genus_av$genus <- row.names(genus_av)
 
 
-#合并基因名以及丰度信息
+#
 #df <- merge(iron_cycle,genus_av,by = "genus", all.y=TRUE)
 
 #df <- merge(biofilm,genus_av,by = "genus", all.y=TRUE)
@@ -289,7 +289,7 @@ genus_av$genus <- row.names(genus_av)
 
 df <- merge(sulfur_cycle,genus_av,by = "genus", all.y=TRUE)
 
-#将KO编号和基因名合并
+#
 library(dplyr)
 df$gene_name <- paste(df$genus,df$gene,sep="")
 
@@ -304,7 +304,7 @@ df <- df[,-(1:3)]
 
 
 
-```{r 气泡图}
+```{r }
 
 
 library(reshape2)
@@ -321,7 +321,7 @@ genus_log.m$Relative_abundance <- genus_log.m$value
 #                   label=c("(0,0.1)","(0.1,1)","(1,5)","(5,10)","(10,30)","(30,50)")) 
 
 palette1 = c("#4682B4","#FF4500","#FFA500","#73BF00","darkred","#57C3C2","#426600")
-#按组标记颜色
+#
 # p <- ggplot(genus_log.m, aes(x=variable, y=gene_name))+     
 #   geom_point(aes(size=Relative_abundance,color=metal),alpha=0.9)+
 #   xlab("sample") + ylab("KO")+theme_bw()+
@@ -334,7 +334,7 @@ p <- ggplot(genus_log.m, aes(x=variable, y=gene_name))+
   theme(axis.text.x = element_text(size = 10, angle = 60, hjust =1),axis.text.y = element_text(size = 8, hjust = 1),legend.title = element_text(size=8))+scale_size_continuous(range=c(1,10))
 p
 
-#+scale_size_continuous(range=c(1,10))控制点的大小范围
+#+scale_size_continuous(range=c(1,10))
 ggsave("./iron_differ.pdf",p,width=5,height=4)
 
 ```
@@ -342,18 +342,18 @@ ggsave("./iron_differ.pdf",p,width=5,height=4)
 
 
 ```{r}
-#哑铃图
+#
 
 Q235s <- read.table(file="./2019112/p3_ps3.txt",header=T,row.names=1,sep="\t")
 design <- read.table("./20180308-201804 R result/beta/beta10000/design31.txt", header=T, row.names= 1, sep="\t")
 otu_all <- read.table("./20180308-201804 R result/otu_table.txt", header=T, row.names= 1, sep="\t")
 #
-or <- match(colnames(otu_all), colnames(Q235s)) #对齐列
+or <- match(colnames(otu_all), colnames(Q235s)) #
 genus <- Q235s[,or]
-sum <- as.list(colSums(otu_all))  #矩阵应该和列表相乘除
-order_count <- genus/sum #各个科的相对丰度
+sum <- as.list(colSums(otu_all))  #
+order_count <- genus/sum #
 
-sub_design = design[rownames(design) %in% colnames(order_count) ,] #对齐环境因子
+sub_design = design[rownames(design) %in% colnames(order_count) ,] #
 order_count = order_count[, rownames(sub_design)]
 
 # 
